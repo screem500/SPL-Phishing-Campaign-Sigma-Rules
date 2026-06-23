@@ -77,6 +77,3 @@ yara yara_spl_customs_phish.yar /path/to/scan/
 Date Detected: June 23, 2026
 Analysis Completed: June 24, 2026
 Rules Status: Production-ready
-Date Detected: June 23, 2026
-Analysis Completed: June 24, 2026
-Rules Status: Production-ready
