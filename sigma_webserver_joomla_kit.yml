@@ -1,0 +1,42 @@
+title: Joomla Template-Directory Phishing Kit / Webshell Activity (Web Server)
+id: 3e7a1c98-6b42-4f0d-9c2e-8d51a4b7c6f2
+status: experimental
+description: >
+  Host-side detection for the COMPROMISED site owner. Flags HTTP requests in
+  Joomla access logs that hit PHP under the template directory (a classic
+  post-auth webshell / phishing-kit drop location) and the specific kit path.
+  Joomla never legitimately serves credential-harvesting PHP from
+  templates/<theme>/etc/form/.
+references:
+  - https://attack.mitre.org/techniques/T1584/004/
+  - https://attack.mitre.org/techniques/T1608/005/
+author: CTI Triage - SPL Phishing
+date: 2026-06-23
+tags:
+  - attack.resource-development
+  - attack.t1584.004
+  - attack.t1608.005
+  - tlp.green
+logsource:
+  category: webserver
+detection:
+  template_php:
+    cs-uri-stem|contains: '/templates/'
+    cs-uri-stem|endswith: '.php'
+  kit_path:
+    cs-uri-stem|contains:
+      - '/templates/purity_iii/etc/form/'
+      - 'lnternationalppost'
+  exfil_sinks:
+    cs-uri-stem|contains:
+      - '/etc/form/'
+    cs-uri-stem|endswith:
+      - 'log.txt'
+      - 'result.txt'
+      - 'data.txt'
+      - 'card.php'
+      - 'otp.php'
+  condition: (template_php and 1 of (kit_path | exfil_sinks)) or kit_path
+falsepositives:
+  - Rare legitimate template AJAX endpoints (review path before triage)
+level: critical

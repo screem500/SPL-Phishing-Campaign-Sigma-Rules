@@ -1,0 +1,45 @@
+title: SPL Customs Clearance Lure Email (Mail Gateway)
+id: 1b9d7e44-5c3a-4d21-8e6f-7a0c2b9f4e31
+status: experimental
+description: >
+  Detects the localized Saudi Post / Customs advance-fee phishing lure:
+  customs "weight mismatch" pretext demanding ~20 SAR within 72 hours, with a
+  link to the compromised Joomla host. Pairs sender-spoof signals with body
+  social-engineering keywords to keep precision high.
+references:
+  - https://attack.mitre.org/techniques/T1566/002/
+  - https://attack.mitre.org/techniques/T1598/
+author: CTI Triage - SPL Phishing
+date: 2026-06-23
+tags:
+  - attack.initial-access
+  - attack.t1566.002
+  - attack.t1598
+  - tlp.green
+logsource:
+  category: mail
+  product: email_gateway
+detection:
+  link_or_sender:
+    - msg_body|contains: 'ccs-ti.com'
+    - sender|contains: '@bahamas.gov.bs'
+  theme_brand:
+    msg_body|contains:
+      - 'Saudi Post'
+      - 'SPL'
+      - 'Customs'
+  theme_lure:
+    msg_body|contains:
+      - 'weight mismatch'
+      - '20 SAR'
+      - '72 hours'
+      - 'clearance fee'
+  dmarc_fail:
+    auth_results|contains:
+      - 'dmarc=fail'
+      - 'dmarc=none'
+      - 'spf=fail'
+  condition: (link_or_sender and theme_brand and theme_lure) or (dmarc_fail and theme_brand)
+falsepositives:
+  - Legitimate Saudi Post customer-service mail (verify against official splonline.com.sa senders)
+level: high

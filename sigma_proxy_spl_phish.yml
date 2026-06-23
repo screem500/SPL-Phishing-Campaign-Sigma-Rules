@@ -1,0 +1,35 @@
+title: SPL Customs Phishing - Joomla Kit URL Access (Proxy/Web)
+id: 8c1f4a02-2d6e-4b7e-9a1a-2f5b3e7c11a0
+status: experimental
+description: >
+  Detects outbound web requests to the Saudi Post (SPL) "Customs Clearance"
+  phishing kit hosted in a compromised Joomla Purity III template directory.
+  Matches the specific campaign URL, the GoDaddy host IP, and the look-alike
+  kit path pattern (lowercase-L "lnternational", doubled-p "ppost").
+references:
+  - https://attack.mitre.org/techniques/T1566/002/
+  - https://attack.mitre.org/techniques/T1656/
+author: CTI Triage - SPL Phishing
+date: 2026-06-23
+tags:
+  - attack.initial-access
+  - attack.t1566.002
+  - attack.t1656
+  - tlp.green
+logsource:
+  category: proxy
+detection:
+  sel_domain:
+    c-uri-host|contains: 'ccs-ti.com'
+  sel_ip:
+    c-ip: '192.169.232.189'
+  sel_path:
+    c-uri|contains:
+      - '/templates/purity_iii/etc/form/'
+      - 'lnternationalppost'
+      - 'purity_iii/etc/form/lnternationalppost/app'
+  condition: sel_domain or sel_ip or sel_path
+falsepositives:
+  - Security analysts or sandboxes intentionally browsing the kit
+  - Takedown/monitoring services revisiting the host
+level: high
