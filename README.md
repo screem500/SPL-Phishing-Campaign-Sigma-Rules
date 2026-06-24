@@ -1,28 +1,28 @@
-# SPL Phishing Campaign - Detection Engineering & Forensic Triage
+SPL Phishing Campaign - Detection Engineering & Forensic Triage
 
-## Overview
+Overview
 
 This repository contains production-grade Sigma Detection Rules and YARA signatures developed during a live forensic triage of a localized phishing campaign impersonating Saudi Post (SPL) and KSA Customs.
 
 
 
-## Threat Intelligence & Root-Cause Analysis
+Threat Intelligence & Root-Cause Analysis
 
 Campaign Type: Phishing targeting KSA citizens via email, using a low-friction advance-fee lure (20 SAR customs fee).
 
 Compromised Host: Legitimate business domain (ccs-ti.com, registered since 2009) running an unpatched Joomla 3.9.22 installation (End-of-Life since August 2023).
 
-Observed Tactic: Attacker leveraged the Joomla Template Manager to inject a persistence backdoor (error.php) and host the phishing kit under /templates/purity_iii/etc/form/lnternationalppost/.
+Observed Tactic: Attacker leveraged the Joomla Template Manager to host the phishing kit under a typosquatted non-standard path (/templates/purity_iii/etc/form/lnternationalppost/). The directory name contains deliberate obfuscation: lowercase L in place of I, and a repeated letter p, to mimic international postal terminology. Dynamic PHP execution confirmed via Cache-Control: no-store, no-cache headers. No persistence mechanism identified via static analysis; dynamic analysis recommended.
 
 Exfiltration Vector: Local data sinks (data.txt, log.txt, result.txt) returned HTTP 404, indicating the kit does not store data locally. Suspected exfiltration to a remote C2 or Telegram Bot (unconfirmed, requires dynamic analysis to verify).
 
 
 
-## Indicators of Compromise (IoCs)
+Indicators of Compromise (IoCs)
 
-Phishing URL:
-https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
+Phishing URL: https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
 
+Kit Activity: Dynamic PHP execution confirmed (Cache-Control: no-store, no-cache, must-revalidate) as of June 24, 2026 01:41:55 GMT
 
 Sender Domain: bahamas.gov.bs
 
@@ -33,8 +33,7 @@ Joomla Version: 3.9.22 (EOL since August 2023)
 Web Server: Apache
 
 
-
-## Detection Coverage
+Detection Coverage
 
 The /detections folder contains the following rules:
 
@@ -51,7 +50,7 @@ yara_spl_customs_phish.yar
 YARA signature for file-level detection of the phishing kit. Matches against known strings, path patterns, and structural indicators found in the recovered kit.
 
 
-## Usage
+Usage
 
 Convert Sigma rules to your SIEM using sigma-cli:
 
@@ -68,9 +67,9 @@ sigma convert -t qradar sigma_proxy_spl_phish.yml
 Run YARA scan against a suspicious directory:
 yara yara_spl_customs_phish.yar /path/to/scan/
 
----
 
-## Triage Timeline
+Triage Timeline
+
 Date Detected: June 23, 2026
 Analysis Completed: June 24, 2026
 Rules Status: Production-ready
