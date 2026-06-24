@@ -23,9 +23,6 @@ Exfiltration Vector: Local data sinks (data.txt, log.txt, result.txt) returned H
 Phishing URL:
 https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
 
-Confirmed Backdoors:
-https://ccs-ti.com/templates/purity_iii/error.php
-https://ccs-ti.com/templates/purity_iii/index.php
 
 Sender Domain: bahamas.gov.bs
 
