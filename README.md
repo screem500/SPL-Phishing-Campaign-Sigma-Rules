@@ -1,72 +1,123 @@
-SPL Phishing Campaign - Detection Engineering & Forensic Triage
+SPL & DHL Phishing Campaign - Detection Engineering & Forensic Triage
 
 Overview
 
-This repository contains production-grade Sigma Detection Rules and YARA signatures developed during a live forensic triage of a localized phishing campaign impersonating Saudi Post (SPL) and KSA Customs.
+This repository documents a live forensic triage of a multi-layered phishing campaign targeting KSA citizens via email. What initially appeared as a simple phishing kit on a compromised Joomla site revealed a three-layer criminal infrastructure: a compromised business website as entry point, a dedicated phishing kit behind Cloudflare impersonating DHL, and a TDS/C2 backend for bot evasion and traffic control.
 
+The repository contains production-grade Sigma Detection Rules and YARA signatures derived from this investigation.
 
+---
 
-Threat Intelligence & Root-Cause Analysis
+Investigation Timeline
 
-Campaign Type: Phishing targeting KSA citizens via email, using a low-friction advance-fee lure (20 SAR customs fee).
+Stage 1 - The Lure
+Phishing email arrives impersonating Saudi Post and KSA Customs demanding 20 SAR customs fee. Sender display address: noreply@bahamas.gov.bs. DNS analysis confirmed bahamas.gov.bs has DMARC p=reject, preventing direct spoofing. Attacker likely used it as display name only.
 
-Compromised Host: Legitimate business domain (ccs-ti.com, registered since 2009) running an unpatched Joomla 3.9.22 installation (End-of-Life since August 2023).
+Stage 2 - Compromised Entry Point Discovered
+Link in email leads to ccs-ti.com, a legitimate business domain registered since 2009. Joomla version fingerprinting via administrator/manifests/files/joomla.xml revealed version 3.9.22, a build from 2020 with no updates. Joomla 3.x branch reached End-of-Life in August 2023. Phishing kit found at a typosquatted non-standard template path. Template files (error.php, index.php) verified clean via content inspection — no malicious functions detected.
 
-Observed Tactic: Attacker leveraged the Joomla Template Manager to host the phishing kit under a typosquatted non-standard path (/templates/purity_iii/etc/form/lnternationalppost/). The directory name contains deliberate obfuscation: lowercase L in place of I, and a repeated letter p, to mimic international postal terminology. Dynamic PHP execution confirmed via Cache-Control: no-store, no-cache headers. No persistence mechanism identified via static analysis; dynamic analysis recommended.
+Stage 3 - TDS Bot Evasion Identified
+curl requests to the kit returned empty responses. Switching to an iPhone User-Agent returned HTTP 200, confirming a Traffic Distribution System actively filtering bots and security scanners.
 
-Exfiltration Vector: Local data sinks (data.txt, log.txt, result.txt) returned HTTP 404, indicating the kit does not store data locally. Suspected exfiltration to a remote C2 or Telegram Bot (unconfirmed, requires dynamic analysis to verify).
+Stage 4 - Real Kit Exposed via Mobile Browser
+Opening the link from a real mobile browser revealed the actual phishing kit on a separate domain: veyipa.astronex.icu. The kit impersonates DHL with a professional delivery-hold page and a fake tracking code (AIPD-1512-KL10), prompting victims to confirm delivery details and pay a fee.
 
+Stage 5 - Full Infrastructure Mapped
+DNS and header analysis revealed all infrastructure behind Cloudflare. The TDS/C2 backend domain t4.citadelenv.su was found embedded as an explicit parameter (oho=t4.citadelenv.su) in the redirect URL. Returns HTTP 500 on direct access, confirming it requires specific parameters to operate. Uses .su TLD (Soviet Union legacy domain) commonly associated with cybercriminal infrastructure.
 
+---
+
+Infrastructure Map
+
+Victim receives phishing email
+    |
+    ccs-ti.com (compromised business site, Joomla 3.9.22 EOL)
+    |
+    TDS: User-Agent check
+    |
+    +-- Bot / scanner: empty response (blocked)
+    |
+    +-- Real mobile browser: HTTP 200
+              |
+              veyipa.astronex.icu (DHL phishing kit, behind Cloudflare)
+                        |
+                        t4.citadelenv.su (TDS/C2 backend, behind Cloudflare, .su TLD)
+
+---
 
 Indicators of Compromise (IoCs)
 
-Phishing URL: https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
+Entry Point URL:
+https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
 
-Kit Activity: Dynamic PHP execution confirmed (Cache-Control: no-store, no-cache, must-revalidate) as of June 24, 2026 01:41:55 GMT
+Phishing Kit Domain: veyipa.astronex.icu
+Phishing Kit IPs: 104.21.83.28 / 172.67.210.230 (Cloudflare)
 
-Sender Domain: bahamas.gov.bs
+TDS/C2 Backend: t4.citadelenv.su
+TDS/C2 IPs: 172.67.135.235 / 104.21.7.88 (Cloudflare)
+
+Fake Tracking Code: AIPD-1512-KL10
+Sender Display Domain: bahamas.gov.bs (DMARC p=reject, display name abuse suspected)
 
 Compromised Host: ccs-ti.com
-
 Joomla Version: 3.9.22 (EOL since August 2023)
-
 Web Server: Apache
+SSL Certificate: Let's Encrypt R12, issued May 4 2026, expires Aug 2 2026
 
+Kit Activity Confirmed: Cache-Control: no-store, no-cache, must-revalidate
+Timestamp: Wed, 24 Jun 2026 01:41:55 GMT
+
+---
 
 Detection Coverage
 
 The /detections folder contains the following rules:
 
 sigma_proxy_spl_phish.yml
-Monitors and alerts on outbound proxy/web traffic targeting the specific typosquatted path under ccs-ti.com.
+Monitors outbound proxy/web traffic targeting the typosquatted path under ccs-ti.com and the phishing kit domain veyipa.astronex.icu.
 
 sigma_email_spl_customs_lure.yml
-Targets the email gateway layer by tracking specific bait strings ("weight mismatch", "20 SAR", "72 hours") combined with DMARC alignment gaps.
+Targets the email gateway layer tracking bait strings ("weight mismatch", "20 SAR", "72 hours", "DELIVERY PENDING") combined with DMARC alignment gaps.
 
 sigma_webserver_joomla_kit.yml
-Designed for webserver log auditing to detect unauthorized directory creation and file writes under Joomla template paths.
+
+Detects unauthorized directory creation and file writes under Joomla template paths in webserver logs.
 
 yara_spl_customs_phish.yar
-YARA signature for file-level detection of the phishing kit. Matches against known strings, path patterns, and structural indicators found in the recovered kit.
+YARA signature matching known strings, path patterns, and structural indicators from the recovered kit.
 
+---
 
 Usage
 
 Convert Sigma rules to your SIEM using sigma-cli:
 
-For Splunk (proxy and email rules):
+For Splunk:
 sigma convert -t splunk -p splunk sigma_proxy_spl_phish.yml
 sigma convert -t splunk -p splunk sigma_email_spl_customs_lure.yml
 
-For Elastic (webserver rule):
+For Elastic:
 sigma convert -t elastic -p ecs_web sigma_webserver_joomla_kit.yml
 
 For QRadar:
 sigma convert -t qradar sigma_proxy_spl_phish.yml
 
-Run YARA scan against a suspicious directory:
+Run YARA scan:
 yara yara_spl_customs_phish.yar /path/to/scan/
 
+---
+
+Reporting
+
+This campaign is active. If you identify it in your environment, report to:
+- CERT-SA (National Cybersecurity Authority)
+- Saudi Post abuse team
+- Hosting provider of ccs-ti.com
+- Cloudflare Abuse for veyipa.astronex.icu and t4.citadelenv.su
+- Google Safe Browsing
+- APWG (Anti-Phishing Working Group)
+
+---
 
 Triage Timeline
 
