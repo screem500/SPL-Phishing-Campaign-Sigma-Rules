@@ -1,6 +1,6 @@
 SPL & DHL Phishing Campaign - Detection Engineering & Forensic Triage
 
-Status: Takedown In Progress - Domain Rotation Detected
+Status: All Channels Exhausted - Awaiting Takedown Decisions
 
 Last Updated: June 25, 2026
 
@@ -20,7 +20,7 @@ Stage 1 - The Lure
 Phishing email impersonates Saudi Post and KSA Customs demanding 20 SAR customs fee within 72 hours. Sender display domain: bahamas.gov.bs. DNS confirmed DMARC p=reject — direct spoofing prevented. Attacker used it as display name only.
 
 Stage 2 - Compromised Entry Point (Layer 1)
-Link leads to ccs-ti.com (Joomla 3.9.22, EOL August 2023). Kit found at non-standard typosquatted template path. Opening from real mobile browser at 11:24 revealed full Arabic SPL phishing page on ccs-ti.com: customs clearance required, 20 SAR fee, 72-hour deadline, weight mismatch warning. Template files verified clean via content inspection.
+Link leads to ccs-ti.com (Joomla 3.9.22, EOL August 2023). Kit found at non-standard typosquatted template path. Opening from real mobile browser revealed full Arabic SPL phishing page on ccs-ti.com: customs clearance required, 20 SAR fee, 72-hour deadline, weight mismatch warning. Template files verified clean via content inspection.
 
 Stage 3 - TDS Bot Evasion Confirmed (Layer 3)
 curl requests returned empty. iPhone User-Agent returned HTTP 200. Cache-Control: no-store, no-cache confirmed dynamic PHP execution as of June 24, 2026 01:41:55 GMT.
@@ -28,16 +28,19 @@ curl requests returned empty. iPhone User-Agent returned HTTP 200. Cache-Control
 Stage 4 - DHL Kit on Separate Domain (Layer 2)
 Clicking the payment button redirected to veyipa.astronex.icu serving a professional DHL delivery-hold page in English with fake tracking code AIPD-1512-KL10. Campaign pivots from Arabic SPL impersonation to English DHL impersonation mid-flow.
 
-Stage 5 - Single-Use Tokens Confirmed (Layer 4)
-Revisiting the ccs-ti.com link returned Unauthorized Access. Kit remained on server (HTTP 200 via curl) but per-session encrypted token had expired. Each email click generates a fresh token and randomized path via the C2 backend.
+Stage 5 - Single-Use Tokens and Path Randomization Confirmed (Layer 4)
+Revisiting the ccs-ti.com link returned Unauthorized Access. Kit remained on server but per-session encrypted token had expired. Each email click generates a fresh token and a completely randomized path via the C2 backend, making URL-level blocking ineffective.
 
 Stage 6 - Campaign Fingerprint Identified
 Parameter analysis across multiple URLs revealed two static IoCs present in every campaign redirect regardless of domain or path rotation:
 ptf=26934eb377001f66e37289a5c93fe284 (campaign fingerprint)
 oho=t4.citadelenv.su (C2 backend)
 
-Stage 7 - Domain Rotation Detected (June 25, 2026)
-After Cloudflare restricted veyipa.astronex.icu, the operator activated a second domain: kemevu.quickinsighthub.st hosted on the same infrastructure (OrangeWebsite, Iceland / THORDC-AS). Identical ptf and oho parameters confirmed same operator. Both domains hosted on OrangeWebsite despite being on different TLDs.
+Stage 7 - Domain Rotation to quickinsighthub.st (June 25, 2026)
+After Cloudflare restricted veyipa.astronex.icu, operator activated kemevu.quickinsighthub.st on the same OrangeWebsite infrastructure. Identical ptf and oho confirmed same operator. Multiple randomized paths observed across sessions:
+/xa/niju/saloni/lobuhi/index.php
+/gone/mocufu/fe/bu/index.php
+/kuxalu/jofopu/veke/index.php
 
 ---
 
@@ -59,10 +62,10 @@ Victim receives phishing email with single-use encrypted token link
               |
               Victim clicks payment button
               |
-              [Domain Rotation]
-              veyipa.astronex.icu (restricted)
-              kemevu.quickinsighthub.st (active)
-              Both: DHL phishing kit, OrangeWebsite hosting
+              [Domain Rotation Pool - all on OrangeWebsite]
+              veyipa.astronex.icu (restricted by Cloudflare)
+              kemevu.quickinsighthub.st (active, restricted by Cloudflare CDN)
+              [potential additional domains unknown]
                         |
                         t4.citadelenv.su (TDS/C2 backend, Cloudflare, .su TLD)
                         Controls routing, token issuance, path randomization
@@ -78,16 +81,15 @@ oho=t4.citadelenv.su
 Entry Point URL:
 https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
 
-Phishing Kit Domain 1 (restricted): veyipa.
-
-astronex.icu
-Registrar: Dynadot LLC (abuse complaint filed, case open)
+Phishing Kit Domain 1 (CDN restricted): veyipa.astronex.icu
+Registrar: Dynadot LLC
 Created: April 7, 2026
 
-Phishing Kit Domain 2 (active): kemevu.quickinsighthub.st
-Registry: .ST Registry (abuse ticket #388498 open)
-Hosting: OrangeWebsite, Iceland (THORDC-AS)
+Phishing Kit Domain 2 (CDN restricted): kemevu.quickinsighthub.st
+Registrar: IncogNET (incognet.io)
+Registry: .ST Registry
 
+Hosting (both domains): OrangeWebsite, Iceland (THORDC-AS)
 Phishing Kit IPs: 104.21.83.28 / 172.67.210.230 (Cloudflare)
 
 TDS/C2 Backend: t4.citadelenv.su
@@ -103,8 +105,8 @@ SSL: Let's Encrypt R12, issued May 4 2026, expires Aug 2 2026
 
 TDS Behavior:
 Single-use encrypted tokens per session (rpclk parameter)
-Randomized paths per session
-Token validity window: approximately 24 minutes (currts delta analysis)
+Fully randomized paths per session on kit domains
+Token validity window: approximately 24 minutes (currts delta)
 Post-expiry response: Unauthorized Access
 
 ---
@@ -119,18 +121,27 @@ t4.citadelenv.su: No longer visible (Report ID: b2e29e733a2612a3)
 Dynadot (Registrar of astronex.icu):
 Status: Under investigation
 Case ID: ddcn:M6vV8z9U8p6C6l:ddcn
+Two formal complaints filed via webform with evidence
+
+IncogNET (Registrar of quickinsighthub.st):
+Status: Ticket open
+Ticket ID: 0625Y12O8
+Referred by ST Registry (Ticket #388498)
 
 ST Registry (.st TLD):
-Status: Ticket open (ID: 388498)
+Status: Answered - referred to IncogNET
+Original Ticket ID: 388498
 
-OrangeWebsite (Origin hosting provider):
-Status: Automated response only, no action taken
-Escalation sent with both domains as pattern of abuse evidence
+OrangeWebsite (Origin hosting - both domains):
+Status: No action taken
+Three escalation emails sent
+Automated responses only
+Note: Self-described free speech host, resistant to takedown requests
 
 CERT-SA: Notified
-CERT Iceland: Notified
+CERT Iceland: Notified (for pressure on OrangeWebsite)
 Shortdot (.icu registry): Notified
-Google Safe Browsing: Both phishing URLs submitted
+Google Safe Browsing: Three phishing URLs submitted
 
 ---
 
@@ -139,7 +150,7 @@ Detection Coverage
 The /detections folder contains the following rules:
 
 sigma_proxy_spl_phish.yml
-Monitors outbound proxy/web traffic for the static campaign parameters ptf=26934eb377001f66e37289a5c93fe284 and oho=t4.citadelenv.su across all domains. Path and domain rotation does not evade this rule since it targets the static parameters.
+Monitors outbound proxy/web traffic for the static campaign parameters ptf=26934eb377001f66e37289a5c93fe284 and oho=t4.citadelenv.su across all domains. Path and domain rotation does not evade this rule.
 
 sigma_email_spl_customs_lure.yml
 Targets the email gateway layer tracking bait strings ("weight mismatch", "20 SAR", "72 hours", "DELIVERY PENDING") combined with DMARC alignment gaps from bahamas.gov.bs.
@@ -177,6 +188,7 @@ If you identify this campaign in your environment, report to:
 CERT-SA: cert@cert.gov.sa
 Cloudflare Abuse: cloudflare.com/abuse/form
 Dynadot Abuse: dynadot.com/report-abuse
+IncogNET Abuse: portal.incognet.io
 Google Safe Browsing: safebrowsing.google.com/safebrowsing/report_phish
 APWG: apwg.org/report-phishing
 
@@ -190,6 +202,5 @@ DHL Kit Observed on veyipa.astronex.icu: June 24, 2026
 Token Expiry Confirmed: June 24, 2026 05:24
 Path Randomization Confirmed: June 24, 2026 05:29
 Domain Rotation to quickinsighthub.st Detected: June 25, 2026 04:59
-Takedown Reports Filed: June 24-25, 2026
-Current Status: Takedown in progress, awaiting Dynadot and ST Registry decisions
-
+All Takedown Channels Exhausted: June 25, 2026
+Current Status: Awaiting Dynadot and IncogNET domain suspension decisions
