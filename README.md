@@ -1,10 +1,16 @@
 SPL & DHL Phishing Campaign - Detection Engineering & Forensic Triage
 
+Status: Takedown In Progress - Domain Rotation Detected
+
+Last Updated: June 25, 2026
+
+---
+
 Overview
 
-This repository documents a live forensic triage of a sophisticated multi-layered phishing campaign targeting KSA citizens via email. What began as a simple 20 SAR customs fee lure revealed a four-layer criminal infrastructure with dynamic path randomization and single-use encrypted tokens per victim session, making traditional URL-based blocking ineffective. The only stable detection anchors across all campaign URLs are two static parameters: the campaign fingerprint (ptf) and the C2 backend address (oho).
+This repository documents a live forensic triage of a sophisticated multi-layered phishing campaign targeting KSA citizens via email. What began as a simple 20 SAR customs fee lure revealed a four-layer criminal infrastructure with dynamic path randomization, single-use encrypted tokens per victim session, and domain rotation capabilities to evade takedowns.
 
-The repository contains production-grade Sigma Detection Rules and YARA signatures derived from this investigation.
+The only stable detection anchors across all campaign URLs are two static parameters that persist even after domain rotation: the campaign fingerprint (ptf) and the C2 backend address (oho).
 
 ---
 
@@ -16,39 +22,28 @@ Phishing email impersonates Saudi Post and KSA Customs demanding 20 SAR customs 
 Stage 2 - Compromised Entry Point (Layer 1)
 Link leads to ccs-ti.com (Joomla 3.9.22, EOL August 2023). Kit found at non-standard typosquatted template path. Opening from real mobile browser at 11:24 revealed full Arabic SPL phishing page on ccs-ti.com: customs clearance required, 20 SAR fee, 72-hour deadline, weight mismatch warning. Template files verified clean via content inspection.
 
-Stage 3 - TDS Bot Evasion Confirmed
+Stage 3 - TDS Bot Evasion Confirmed (Layer 3)
 curl requests returned empty. iPhone User-Agent returned HTTP 200. Cache-Control: no-store, no-cache confirmed dynamic PHP execution as of June 24, 2026 01:41:55 GMT.
 
 Stage 4 - DHL Kit on Separate Domain (Layer 2)
-Clicking the payment button redirected to veyipa.astronex.icu serving a professional DHL delivery-hold page in English with fake tracking code AIPD-1512-KL10. Campaign pivots from Arabic SPL impersonation to English DHL impersonation mid-flow to maximize victim trust.
+Clicking the payment button redirected to veyipa.astronex.icu serving a professional DHL delivery-hold page in English with fake tracking code AIPD-1512-KL10. Campaign pivots from Arabic SPL impersonation to English DHL impersonation mid-flow.
 
-Stage 5 - Token Expiry Confirms Single-Use Mechanism (Layer 3)
-Revisiting the ccs-ti.com link at 5:24 returned "Unauthorized Access" on blank page. curl still returned HTTP 200 confirming kit remained on server. The rpclk parameter in the redirect URL is a single-use encrypted per-session token that invalidates after first use or time expiry.
+Stage 5 - Single-Use Tokens Confirmed (Layer 4)
+Revisiting the ccs-ti.com link returned Unauthorized Access. Kit remained on server (HTTP 200 via curl) but per-session encrypted token had expired. Each email click generates a fresh token and randomized path via the C2 backend.
 
-Stage 6 - Path Randomization and Campaign Fingerprint Identified (Layer 4)
-Opening the email again from Outlook at 5:29 (24 minutes later) generated a completely new redirect. The path on veyipa.astronex.icu changed entirely:
+Stage 6 - Campaign Fingerprint Identified
+Parameter analysis across multiple URLs revealed two static IoCs present in every campaign redirect regardless of domain or path rotation:
+ptf=26934eb377001f66e37289a5c93fe284 (campaign fingerprint)
+oho=t4.citadelenv.su (C2 backend)
 
-Previous path: /kiwusu/ga/goye/cisazode/ca/index.php
-New path:      /rodige/yetifu/pili/index.php
-
-Parameter analysis across both URLs revealed:
-
-Changing per session (dynamic):
-- rpclk: unique encrypted session token
-- p: session hash
-- currts: Unix timestamp (1782266744 → 1782268184, delta = 1440 seconds = 24 minutes)
-
-Static across all campaign URLs (stable IoCs):
-- oho=t4.citadelenv.su (C2 backend address)
-- ptf=26934eb377001f66e37289a5c93fe284 (campaign fingerprint)
-
-The ptf and oho parameters are the only reliable detection anchors in this campaign since all paths and tokens change per session.
+Stage 7 - Domain Rotation Detected (June 25, 2026)
+After Cloudflare restricted veyipa.astronex.icu, the operator activated a second domain: kemevu.quickinsighthub.st hosted on the same infrastructure (OrangeWebsite, Iceland / THORDC-AS). Identical ptf and oho parameters confirmed same operator. Both domains hosted on OrangeWebsite despite being on different TLDs.
 
 ---
 
 Infrastructure Map
 
-Victim receives phishing email
+Victim receives phishing email with single-use encrypted token link
     |
     Click triggers token generation at t4.citadelenv.su
     Issues unique rpclk token + randomized path per session
@@ -58,31 +53,41 @@ Victim receives phishing email
     |
     TDS: User-Agent check + token validation
     |
-    +-- Bot / expired token: "Unauthorized Access"
+    +-- Bot / expired token: Unauthorized Access
     |
-    +-- Real mobile + valid token: HTTP 200
+    +-- Real mobile browser + valid token: HTTP 200
               |
               Victim clicks payment button
               |
-              veyipa.astronex.icu/[randomized path]/index.php
-              DHL phishing kit (Cloudflare)
+              [Domain Rotation]
+              veyipa.astronex.icu (restricted)
+              kemevu.quickinsighthub.st (active)
+              Both: DHL phishing kit, OrangeWebsite hosting
                         |
                         t4.citadelenv.su (TDS/C2 backend, Cloudflare, .su TLD)
-                        Controls routing, token issuance, path randomization, data collection
+                        Controls routing, token issuance, path randomization
 
 ---
 
 Indicators of Compromise (IoCs)
 
-Static Campaign Fingerprints (present in ALL campaign URLs):
+Static Campaign Fingerprints (present in ALL campaign URLs across all domains):
 ptf=26934eb377001f66e37289a5c93fe284
 oho=t4.citadelenv.su
 
 Entry Point URL:
 https://ccs-ti.com/templates/purity_iii/etc/form/lnternationalppost/app/index.php
 
-Phishing Kit Domain (Layer 1): ccs-ti.com
-Phishing Kit Domain (Layer 2): veyipa.astronex.icu
+Phishing Kit Domain 1 (restricted): veyipa.
+
+astronex.icu
+Registrar: Dynadot LLC (abuse complaint filed, case open)
+Created: April 7, 2026
+
+Phishing Kit Domain 2 (active): kemevu.quickinsighthub.st
+Registry: .ST Registry (abuse ticket #388498 open)
+Hosting: OrangeWebsite, Iceland (THORDC-AS)
+
 Phishing Kit IPs: 104.21.83.28 / 172.67.210.230 (Cloudflare)
 
 TDS/C2 Backend: t4.citadelenv.su
@@ -96,14 +101,36 @@ Joomla Version: 3.9.22 (EOL since August 2023)
 Web Server: Apache
 SSL: Let's Encrypt R12, issued May 4 2026, expires Aug 2 2026
 
-Kit Confirmed Active: Cache-Control: no-store, no-cache, must-revalidate
-Timestamp: Wed, 24 Jun 2026 01:41:55 GMT
-
 TDS Behavior:
-- Single-use encrypted tokens per session (rpclk parameter)
-- Randomized paths on veyipa.astronex.icu per session
-- Post-expiry response: "Unauthorized Access"
-- Token validity window: approximately 24 minutes (based on currts delta)
+Single-use encrypted tokens per session (rpclk parameter)
+Randomized paths per session
+Token validity window: approximately 24 minutes (currts delta analysis)
+Post-expiry response: Unauthorized Access
+
+---
+
+Takedown Status
+
+Cloudflare:
+veyipa.astronex.icu: Restricted (Report ID: fb87731872d82c63)
+kemevu.quickinsighthub.st: Restricted (Report ID: 7f9c9f1c2a0a5ad9)
+t4.citadelenv.su: No longer visible (Report ID: b2e29e733a2612a3)
+
+Dynadot (Registrar of astronex.icu):
+Status: Under investigation
+Case ID: ddcn:M6vV8z9U8p6C6l:ddcn
+
+ST Registry (.st TLD):
+Status: Ticket open (ID: 388498)
+
+OrangeWebsite (Origin hosting provider):
+Status: Automated response only, no action taken
+Escalation sent with both domains as pattern of abuse evidence
+
+CERT-SA: Notified
+CERT Iceland: Notified
+Shortdot (.icu registry): Notified
+Google Safe Browsing: Both phishing URLs submitted
 
 ---
 
@@ -112,7 +139,7 @@ Detection Coverage
 The /detections folder contains the following rules:
 
 sigma_proxy_spl_phish.yml
-Monitors outbound proxy/web traffic for the static campaign parameters ptf=26934eb377001f66e37289a5c93fe284 and oho=t4.citadelenv.su, and traffic to veyipa.astronex.icu and the entry-point path on ccs-ti.com.
+Monitors outbound proxy/web traffic for the static campaign parameters ptf=26934eb377001f66e37289a5c93fe284 and oho=t4.citadelenv.su across all domains. Path and domain rotation does not evade this rule since it targets the static parameters.
 
 sigma_email_spl_customs_lure.yml
 Targets the email gateway layer tracking bait strings ("weight mismatch", "20 SAR", "72 hours", "DELIVERY PENDING") combined with DMARC alignment gaps from bahamas.gov.bs.
@@ -146,22 +173,23 @@ yara yara_spl_customs_phish.yar /path/to/scan/
 
 Reporting
 
-This campaign is active. Report to:
-CERT-SA (National Cybersecurity Authority)
-Saudi Post abuse team
-Hosting provider of ccs-ti.com
-Cloudflare Abuse for veyipa.astronex.icu and t4.citadelenv.su
-Google Safe Browsing
-APWG (Anti-Phishing Working Group)
+If you identify this campaign in your environment, report to:
+CERT-SA: cert@cert.gov.sa
+Cloudflare Abuse: cloudflare.com/abuse/form
+Dynadot Abuse: dynadot.com/report-abuse
+Google Safe Browsing: safebrowsing.google.com/safebrowsing/report_phish
+APWG: apwg.org/report-phishing
 
 ---
 
 Triage Timeline
 
 Date Detected: June 23, 2026
-SPL Kit Observed: June 24, 2026 11:24
-DHL Kit Observed: June 24, 2026 (via mobile redirect)
+SPL Kit Observed on ccs-ti.com: June 24, 2026 11:24
+DHL Kit Observed on veyipa.astronex.icu: June 24, 2026
 Token Expiry Confirmed: June 24, 2026 05:24
 Path Randomization Confirmed: June 24, 2026 05:29
-Analysis Completed: June 24, 2026
-Rules Status: Production-ready
+Domain Rotation to quickinsighthub.st Detected: June 25, 2026 04:59
+Takedown Reports Filed: June 24-25, 2026
+Current Status: Takedown in progress, awaiting Dynadot and ST Registry decisions
+
